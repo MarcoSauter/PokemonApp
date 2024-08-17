@@ -5,12 +5,21 @@
 //  Created by Marco Sauter on 16.08.24.
 //
 import SwiftUI
-import Charts
 
-struct ContentView: View {
+struct PokemonView: View {
     @State private var pokemonList: [Pokemon] = []
     @State private var selectedPokemon: Pokemon? = nil // State for the selected Pokémon
-    @State private var isShowingDetail = false // State to control sheet presentation
+    @State private var searchTerm = ""
+    @State private var searchResults: [Pokemon] = []
+    
+    var listPokemon: [Pokemon] {
+        if searchTerm.isEmpty {
+            return pokemonList
+        }
+        else {
+            return searchResults
+        }
+    }
     let pokemonService = PokemonService()
     
     // Define a grid layout with two columns
@@ -23,7 +32,7 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 16) { // Create a grid with 2 columns
-                    ForEach(pokemonList, id: \.self) { pokemon in
+                    ForEach((listPokemon), id: \.self) { pokemon in
                         
                         VStack(alignment: .leading) {
                             Text(pokemon.pokemonInfo.name.capitalized)
@@ -47,15 +56,15 @@ struct ContentView: View {
                         .shadow(radius: 5)
                         .onTapGesture {
                             selectedPokemon = pokemon
-                            isShowingDetail = true
                         }
                     }
                 }
                 .padding()
             }
             .navigationTitle("Pokémon List")
+            .animation(.default, value: searchTerm)
             .task {
-                if let fetchedPokemon = await pokemonService.fetchPokemonData(limit: 30) {
+                if let fetchedPokemon = await pokemonService.fetchPokemonData(limit: 50) {
                     self.pokemonList = fetchedPokemon
                 }
             }
@@ -63,59 +72,15 @@ struct ContentView: View {
                 PokemonDetailView(pokemon: pokemon, color: pokemonService.convertTypeToColor(type: pokemon.pokemonInfo.types[0].type.name))
             }
         }
-    }
-}
-
-struct PokemonDetailView: View {
-    let pokemon: Pokemon
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text(pokemon.pokemonInfo.name.capitalized)
-                .font(.largeTitle)
-                .padding()
-            
-            AsyncImage(url: URL(string: pokemon.img)) { image in
-                image
-                    .resizable()
-                    .scaledToFit()
-            } placeholder: {
-                ProgressView()
-            }
-            .frame(width: 200, height: 200)
-            
-            Text("Height: \(pokemon.pokemonInfo.height/10, specifier: "%.2f") m")
-                .font(.title2)
-            Text("Weight: \(pokemon.pokemonInfo.weight/10, specifier: "%.2f") kg")
-                .font(.title2)
-            
-            Chart {
-                ForEach(pokemon.pokemonInfo.stats, id: \.self) { stat in
-                    BarMark(
-                        x: .value("Value", stat.base_stat),
-                        y: .value("Stats", stat.stat.name)
-                    )
-                    .cornerRadius(5)
-                    .foregroundStyle(color)
-                }
-                
-            }
-            .background(Color.white)
-            .chartXAxis(.hidden)
-            .cornerRadius(10)
-            .border(/*@START_MENU_TOKEN@*/Color.black/*@END_MENU_TOKEN@*/)
-            
-            Spacer()
+        .searchable(text: $searchTerm, placement: .navigationBarDrawer(displayMode: .always))
+        .onChange(of: searchTerm) {
+            searchResults = pokemonList.filter({ pokemon in
+                pokemon.pokemonInfo.name.lowercased().contains(searchTerm.lowercased()) || pokemon.pokemonInfo.types[0].type.name.lowercased().contains(searchTerm.lowercased())
+            })
         }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(color)
-        .cornerRadius(10)
-        .shadow(radius: 5)
     }
 }
 
 #Preview {
-    ContentView()
+    PokemonView()
 }
